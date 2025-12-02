@@ -1,0 +1,59 @@
+# Data files
+*.csv
+*.xlsx
+*.xls
+
+# Data loading/migration scripts
+import_*.py
+create_*.py
+setup_*.py
+fix_*.py
+test_*.py
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# Environment
+.env
+.env.*
+*.local
+
+# Frappe/ERPNext sites (contains DB credentials and user data)
+sites/
+
+# Python virtual environment
+env/
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sql
+
+# Backups
+*.zip
+
+# Allow seed directory (database seeding for dev)
+!seed/
+!seed/*

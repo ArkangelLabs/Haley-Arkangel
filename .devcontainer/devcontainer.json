@@ -1,0 +1,40 @@
+{
+  "name": "Haley - ERPNext",
+  "forwardPorts": [8000, 9000],
+  "remoteUser": "frappe",
+  "postCreateCommand": "/workspace/development/.devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-vscode.live-server",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-mysql",
+        "visualstudioexptteam.vscodeintellicode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "sqltools.connections": [
+          {
+            "mysqlOptions": {
+              "authProtocol": "default",
+              "enableSsl": "Disabled"
+            },
+            "previewLimit": 50,
+            "server": "mariadb",
+            "port": 3306,
+            "driver": "MariaDB",
+            "name": "MariaDB",
+            "username": "root",
+            "password": "123",
+            "database": "mysql"
+          }
+        ]
+      }
+    }
+  },
+  "dockerComposeFile": "./docker-compose.yml",
+  "service": "frappe",
+  "workspaceFolder": "/workspace/development",
+  "shutdownAction": "stopCompose"
+}

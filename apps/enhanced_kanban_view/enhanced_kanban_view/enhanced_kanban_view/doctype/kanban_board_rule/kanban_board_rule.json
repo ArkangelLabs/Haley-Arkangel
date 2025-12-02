@@ -1,0 +1,64 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "autoincrement",
+ "creation": "2025-07-14 18:30:33.393850",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "kanban_board",
+  "kanban_board_column",
+  "required_fields"
+ ],
+ "fields": [
+  {
+   "fieldname": "kanban_board",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Kanban Board",
+   "options": "Kanban Board",
+   "reqd": 1
+  },
+  {
+   "fieldname": "kanban_board_column",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Kanban Board Column",
+   "options": "Kanban Board Column",
+   "reqd": 1
+  },
+  {
+   "fieldname": "required_fields",
+   "fieldtype": "Table",
+   "label": "Required Fields",
+   "options": "Kanban Rule Field"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2025-07-14 20:21:56.953186",
+ "modified_by": "Administrator",
+ "module": "Enhanced Kanban View",
+ "name": "Kanban Board Rule",
+ "naming_rule": "Autoincrement",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": []
+}
