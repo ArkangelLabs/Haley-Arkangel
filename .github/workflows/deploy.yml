@@ -23,24 +23,19 @@ jobs:
 
       - name: Deploy
         run: |
-          ssh -i ~/.ssh/lightsail.pem ubuntu@${{ env.LIGHTSAIL_HOST }} 'bash -s' << 'EOF'
-          set -e
-
-          echo "=== Pulling latest code ==="
-          cd /home/frappe/repos/haley
-          sudo -u frappe git pull origin main
-
-          echo "=== Running deployment ==="
-          cd /home/frappe/frappe-bench
-          sudo -u frappe /home/frappe/.local/bin/bench --site haley.localhost migrate --skip-failing
-          sudo -u frappe /home/frappe/.local/bin/bench build --app enhanced_kanban_view
-          sudo -u frappe /home/frappe/.local/bin/bench --site haley.localhost clear-cache
-
-          echo "=== Restarting services ==="
-          sudo supervisorctl restart all
-
-          echo "=== Deployment complete! ==="
-          EOF
+          ssh -i ~/.ssh/lightsail.pem ubuntu@${{ env.LIGHTSAIL_HOST }} "
+            set -e
+            echo '=== Pulling latest code ==='
+            cd /home/frappe/repos/haley && sudo -u frappe git pull origin main
+            echo '=== Running deployment ==='
+            cd /home/frappe/frappe-bench
+            sudo -u frappe /home/frappe/.local/bin/bench --site haley.localhost migrate --skip-failing
+            sudo -u frappe /home/frappe/.local/bin/bench build --app enhanced_kanban_view
+            sudo -u frappe /home/frappe/.local/bin/bench --site haley.localhost clear-cache
+            echo '=== Restarting services ==='
+            sudo supervisorctl restart all
+            echo '=== Deployment complete! ==='
+          "
 
       - name: Health check
         run: |
