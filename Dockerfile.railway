@@ -27,6 +27,8 @@ ENV \
 ###############################################
 COPY production/mariadb.cnf /home/$systemUser/mariadb.cnf
 COPY --chown=1000:1000 production/railway-entrypoint.sh /usr/local/bin/entrypoint.sh
+# Copy local enhanced_kanban_view app (will be moved into bench/apps after bench init)
+COPY --chown=1000:1000 apps/enhanced_kanban_view /home/$systemUser/enhanced_kanban_view_src
 
 RUN sudo chmod +x /usr/local/bin/entrypoint.sh
 
@@ -78,16 +80,20 @@ RUN sudo apt-get update \
     # copy MariaDB Config
     && sudo cp /home/$systemUser/mariadb.cnf /etc/mysql/mariadb.cnf \
     && sudo service mariadb start \
+    && sudo service redis-server start \
     && sudo mariadb --user="root" --password="${mysqlPass}" --execute="ALTER USER 'root'@'localhost' IDENTIFIED BY '${mysqlPass}';" \
     ###############################################
     # Init Bench
     ###############################################
-    && bench init $benchFolderName --frappe-path $frappeRepo --frappe-branch $appBranch --python $pythonVersion \
+    && bench init $benchFolderName --frappe-path $frappeRepo --frappe-branch $appBranch --python $pythonVersion --skip-redis-config-generation \
     && cd $benchFolderName \
+    # Configure Redis to use standard port 6379 (already running from system service)
+    && echo '{"db_host": "127.0.0.1", "redis_cache": "redis://127.0.0.1:6379", "redis_queue": "redis://127.0.0.1:6379", "redis_socketio": "redis://127.0.0.1:6379"}' > sites/common_site_config.json \
     # install erpnext
     && bench get-app erpnext $erpnextRepo --branch $appBranch \
-    # install enhanced kanban view
-    && bench get-app https://github.com/ArkSol-Innovations/enhanced-kanban-view --branch main \
+    # install enhanced kanban view from local copy
+    && mv /home/$systemUser/enhanced_kanban_view_src apps/enhanced_kanban_view \
+    && bench setup requirements --node --dev \
     # delete temp file
     && sudo rm -rf /tmp/* \
     # start new site

@@ -1,10 +1,6 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile.railway"
-watchPatterns = ["production/**", "Dockerfile.railway"]
-
-[build.args]
-FRAPPE_BRANCH = "version-16"
+dockerfilePath = "Dockerfile.railway.pullonly"
 
 [deploy]
 healthcheckPath = "/api/method/ping"

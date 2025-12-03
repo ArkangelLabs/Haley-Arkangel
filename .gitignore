@@ -3,12 +3,12 @@
 *.xlsx
 *.xls
 
-# Data loading/migration scripts
-import_*.py
-create_*.py
-setup_*.py
-fix_*.py
-test_*.py
+# Data loading/migration scripts (root level only)
+/import_*.py
+/create_*.py
+/setup_*.py
+/fix_*.py
+/test_*.py
 
 # Python
 __pycache__/

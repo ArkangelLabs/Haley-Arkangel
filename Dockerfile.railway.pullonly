@@ -1,0 +1,2 @@
+# Haley - Pull pre-built image from ghcr.io
+FROM ghcr.io/arkangellabs/haley:latest
