@@ -6,8 +6,13 @@ FROM frappe/erpnext:v16
 # Copy enhanced_kanban_view app
 COPY apps/enhanced_kanban_view /home/frappe/frappe-bench/apps/enhanced_kanban_view
 
-# Install the app (register in apps.txt)
-RUN echo "enhanced_kanban_view" >> /home/frappe/frappe-bench/sites/apps.txt
+# Install the app (register in apps.txt with proper newline)
+RUN echo "" >> /home/frappe/frappe-bench/sites/apps.txt && \
+    echo "enhanced_kanban_view" >> /home/frappe/frappe-bench/sites/apps.txt
+
+# Install Python dependencies for the app
+RUN cd /home/frappe/frappe-bench/apps/enhanced_kanban_view && \
+    pip install -e .
 
 # Build assets for the app
 RUN cd /home/frappe/frappe-bench && \
