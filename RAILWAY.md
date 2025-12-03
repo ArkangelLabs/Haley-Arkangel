@@ -1,11 +1,37 @@
 # Haley Railway Deployment Guide
 
-This guide covers deploying Haley to Railway.
+This guide covers deploying Haley (ERPNext v16) to Railway.
 
-## Prerequisites
+## Architecture
 
-1. A Railway account
-2. Railway CLI installed (optional, for local management)
+Railway has a **volume limitation**: each volume can only be attached to ONE service. Since Frappe requires multiple processes (web, workers, scheduler, socketio) to share the same `sites/` directory, we use **supervisor** to run ALL processes in a single container.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Railway Project                        │
+├─────────────────────────────────────────────────────────┤
+│  ┌─────────────────────────────────────────────────┐    │
+│  │              Haley Container                     │    │
+│  │  ┌─────────────────────────────────────────┐    │    │
+│  │  │           Supervisor                     │    │    │
+│  │  │  • Gunicorn (web)                       │    │    │
+│  │  │  • Socketio (realtime)                  │    │    │
+│  │  │  • Scheduler (cron)                     │    │    │
+│  │  │  • Worker-short (background jobs)       │    │    │
+│  │  │  • Worker-long (background jobs)        │    │    │
+│  │  └─────────────────────────────────────────┘    │    │
+│  │                      │                           │    │
+│  │               [sites/ volume]                   │    │
+│  └──────────────────────┼──────────────────────────┘    │
+│                         │                               │
+│       ┌─────────────────┼─────────────────┐             │
+│       ▼                 ▼                 ▼             │
+│  ┌──────────┐     ┌──────────┐      ┌──────────┐       │
+│  │  MySQL   │     │  Redis   │      │  Redis   │       │
+│  │    DB    │     │  Cache   │      │  Queue   │       │
+│  └──────────┘     └──────────┘      └──────────┘       │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## Deployment Steps
 
@@ -13,144 +39,155 @@ This guide covers deploying Haley to Railway.
 
 1. Go to [Railway](https://railway.app)
 2. Click "New Project" → "Deploy from GitHub repo"
-3. Select your `Haley-Arkangel` repository
+3. Select the `Haley-Arkangel` repository
+4. The build will start but the container won't work yet (needs DB/Redis)
 
 ### 2. Add Required Services
 
-After the initial deployment fails (expected - needs database), add these services:
+#### MySQL Database
+1. Click "New" → "Database" → "MySQL"
+2. Railway will create and configure the database automatically
 
-#### MariaDB Database
-1. Click "New" → "Database" → "MySQL" (Railway uses MySQL, compatible with MariaDB)
-2. Note the connection variables Railway provides
-
-#### Redis (2 instances needed)
+#### Redis (ONE instance for both cache and queue)
 1. Click "New" → "Database" → "Redis"
-2. Rename to "redis-cache"
-3. Repeat and create another Redis, rename to "redis-queue"
+2. One Redis instance is sufficient for both cache and queue
 
 ### 3. Configure Environment Variables
 
-Click on your Haley service and add these variables:
+Click on your Haley service → Variables tab → Add these:
 
-```
-# Database (from Railway MySQL service)
+```bash
+# Database - Reference Railway's MySQL service
 DB_HOST=${{MySQL.MYSQLHOST}}
 DB_PORT=${{MySQL.MYSQLPORT}}
 DB_ROOT_PASSWORD=${{MySQL.MYSQL_ROOT_PASSWORD}}
 
-# Redis (from Railway Redis services)
-REDIS_CACHE=${{redis-cache.REDISHOST}}:${{redis-cache.REDISPORT}}
-REDIS_QUEUE=${{redis-queue.REDISHOST}}:${{redis-queue.REDISPORT}}
+# Redis - Reference Railway's Redis service
+REDIS_URL=${{Redis.REDIS_URL}}
 
 # Site Configuration
-SITE_NAME=haley.railway.app
-ADMIN_PASSWORD=your_admin_password
-
-# Worker Type (default is web)
-WORKER_TYPE=web
+SITE_NAME=haley.example.com
+ADMIN_PASSWORD=your_secure_password_here
 ```
 
-### 4. Deploy Additional Workers (Optional but Recommended)
+**Important**: Replace `haley.example.com` with your actual domain or Railway's generated domain.
 
-For production, you need background workers. Create additional services from the same repo:
+### 4. Deploy
 
-#### Scheduler
-- Click "New" → "GitHub Repo" → select same repo
-- Add env var: `WORKER_TYPE=scheduler`
-- Add same DB_HOST, REDIS_* variables
+After setting variables, Railway will automatically redeploy. The first deployment:
+1. Configures database/redis connections
+2. Creates the site (if SITE_NAME and DB_ROOT_PASSWORD are set)
+3. Installs ERPNext and Enhanced Kanban View
+4. Runs migrations
+5. Starts all processes via supervisor
 
-#### Queue Worker
-- Click "New" → "GitHub Repo" → select same repo
-- Add env var: `WORKER_TYPE=worker-short`
-- Add same DB_HOST, REDIS_* variables
+This takes several minutes on first run.
 
-### 5. First-Time Site Setup
+### 5. Access Your Site
 
-After all services are running, access the web service shell:
-
-```bash
-railway run bash
-```
-
-Or use Railway's console feature, then run:
-
-```bash
-cd /home/frappe/frappe-bench
-bench new-site your-site-name \
-    --db-root-password $DB_ROOT_PASSWORD \
-    --admin-password your_password \
-    --no-mariadb-socket
-
-bench --site your-site-name install-app erpnext
-bench --site your-site-name install-app enhanced_kanban_view
-bench --site your-site-name migrate
-bench use your-site-name
-```
+Once deployment completes:
+1. Go to Settings → Networking → Generate Domain (or add custom domain)
+2. Access your site at the provided URL
+3. Login with:
+   - Username: `Administrator`
+   - Password: Value of `ADMIN_PASSWORD` env var
 
 ## Environment Variables Reference
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `DB_HOST` | Database host | Yes |
-| `DB_PORT` | Database port (default: 3306) | No |
-| `DB_ROOT_PASSWORD` | Database root password | Yes |
-| `REDIS_CACHE` | Redis cache host:port | Yes |
-| `REDIS_QUEUE` | Redis queue host:port | Yes |
-| `SITE_NAME` | Frappe site name | Yes |
-| `ADMIN_PASSWORD` | Admin user password | Yes (first run) |
-| `WORKER_TYPE` | web, scheduler, worker-short, worker-long, socketio | No (default: web) |
-| `GUNICORN_WORKERS` | Number of gunicorn workers | No (default: 2) |
-| `PORT` | Web server port | No (Railway sets this) |
+| `DB_HOST` | MySQL host (from Railway service) | Yes |
+| `DB_PORT` | MySQL port (default: 3306) | No |
+| `DB_ROOT_PASSWORD` | MySQL root password | Yes |
+| `REDIS_URL` | Full Redis URL from Railway | Yes |
+| `SITE_NAME` | Your domain name for the site | Yes |
+| `ADMIN_PASSWORD` | Administrator password | Yes |
+| `PORT` | Web server port (Railway sets this) | No |
 
-## Architecture on Railway
+## Manual Site Creation (Alternative)
 
+If automatic site creation fails, you can create the site manually:
+
+1. Open Railway shell: Click on service → Shell tab
+2. Run these commands:
+
+```bash
+cd /home/frappe/frappe-bench
+
+# Create site
+bench new-site your-site-name \
+    --db-root-password "$DB_ROOT_PASSWORD" \
+    --admin-password "your_password" \
+    --no-mariadb-socket
+
+# Install apps
+bench --site your-site-name install-app erpnext
+bench --site your-site-name install-app enhanced_kanban_view
+
+# Set default site
+bench use your-site-name
+
+# Run migrations
+bench --site your-site-name migrate
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Railway Project                      │
-├─────────────────────────────────────────────────────────┤
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │   Web    │  │ Scheduler│  │  Worker  │              │
-│  │ (Haley)  │  │ (Haley)  │  │ (Haley)  │              │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘              │
-│       │             │             │                     │
-│       └─────────────┼─────────────┘                     │
-│                     │                                   │
-│       ┌─────────────┼─────────────┐                     │
-│       ▼             ▼             ▼                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │  MySQL   │  │  Redis   │  │  Redis   │              │
-│  │    DB    │  │  Cache   │  │  Queue   │              │
-│  └──────────┘  └──────────┘  └──────────┘              │
-└─────────────────────────────────────────────────────────┘
+
+## Restoring from Backup
+
+To restore your existing database:
+
+1. Upload backup to a public URL or use Railway shell
+2. Open Railway shell and run:
+
+```bash
+cd /home/frappe/frappe-bench
+bench --site $SITE_NAME restore /path/to/backup.sql.gz
+bench --site $SITE_NAME migrate
+bench build
+bench --site $SITE_NAME clear-cache
 ```
 
 ## Costs
 
-Railway bills per usage. Expected costs for Haley:
-- Web service: ~$5-15/month
-- Workers: ~$3-5/month each
+Estimated Railway costs (varies by usage):
+- Haley container: ~$10-20/month
 - MySQL: ~$5-10/month
-- Redis (x2): ~$2-5/month each
+- Redis: ~$5/month
 
-Total: ~$15-40/month depending on usage
+Total: ~$20-35/month
 
 ## Troubleshooting
 
 ### Build Fails
-- Check Railway logs for specific error
-- Ensure Dockerfile is at root level
-- Verify production/apps.json has valid GitHub URLs
+- Check Railway build logs for specific errors
+- Ensure `Dockerfile.railway` exists at root
+- Verify `production/apps.json` has valid GitHub URLs
 
 ### Site Not Loading
-- Verify all env variables are set
-- Check that DB and Redis services are healthy
-- Run migrations: `bench --site $SITE_NAME migrate`
+- Check that all environment variables are set correctly
+- Verify MySQL and Redis services are running
+- Check container logs for errors
 
 ### 502 Bad Gateway
-- Container might still be starting (frappe takes time)
-- Check if site exists: `bench --site $SITE_NAME list-apps`
-- Verify DB connection: `bench --site $SITE_NAME mariadb`
+- Container might still be starting (can take 2-5 minutes)
+- Check supervisor status: `supervisorctl status`
+- View logs: `tail -f /var/log/supervisor/*.log`
 
-### Missing Assets
-- Rebuild: `bench build`
-- Clear cache: `bench --site $SITE_NAME clear-cache`
+### Database Connection Issues
+- Verify DB_HOST matches Railway's MySQL host
+- Check DB_ROOT_PASSWORD is correct
+- Test connection: `mariadb -h $DB_HOST -P $DB_PORT -u root -p`
+
+### Redis Connection Issues
+- Verify REDIS_URL is set correctly
+- Check Redis service is running in Railway dashboard
+
+## Limitations
+
+- **Single container**: All processes run in one container (Railway volume limitation)
+- **Cold starts**: May take 1-2 minutes after period of inactivity
+- **File uploads**: Stored in container volume, may be lost on redeploy without persistent volume
+- **Scaling**: Horizontal scaling not possible due to shared state
+
+For production workloads requiring high availability, consider:
+- [Frappe Cloud](https://frappecloud.com) (managed hosting)
+- Self-hosted on DigitalOcean/Hetzner with proper Docker Compose setup

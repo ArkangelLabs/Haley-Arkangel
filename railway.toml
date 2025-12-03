@@ -1,14 +1,15 @@
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile"
-watchPatterns = ["production/**", "apps/**", "Dockerfile"]
+dockerfilePath = "Dockerfile.railway"
+watchPatterns = ["production/**", "Dockerfile.railway"]
 
 [build.args]
 FRAPPE_BRANCH = "version-16"
 
 [deploy]
 healthcheckPath = "/api/method/ping"
-healthcheckTimeout = 300
+healthcheckTimeout = 600
+startCommand = ""
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 numReplicas = 1
