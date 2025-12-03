@@ -26,8 +26,16 @@ jobs:
 
       - name: Deploy custom apps
         run: |
-          # Copy enhanced_kanban_view to server
-          scp -i ~/.ssh/lightsail.pem -r apps/enhanced_kanban_view ubuntu@${{ env.LIGHTSAIL_HOST }}:/tmp/
+          # Create tarball excluding node_modules and other dev artifacts
+          cd apps
+          tar --exclude='node_modules' --exclude='*.pyc' --exclude='__pycache__' -czf /tmp/enhanced_kanban_view.tar.gz enhanced_kanban_view
+          cd ..
+
+          # Copy tarball to server
+          scp -i ~/.ssh/lightsail.pem /tmp/enhanced_kanban_view.tar.gz ubuntu@${{ env.LIGHTSAIL_HOST }}:/tmp/
+
+          # Extract on server
+          ssh -i ~/.ssh/lightsail.pem ubuntu@${{ env.LIGHTSAIL_HOST }} "cd /tmp && rm -rf enhanced_kanban_view && tar -xzf enhanced_kanban_view.tar.gz"
 
           # Install/update the app
           ssh -i ~/.ssh/lightsail.pem ubuntu@${{ env.LIGHTSAIL_HOST }} << 'DEPLOY'
