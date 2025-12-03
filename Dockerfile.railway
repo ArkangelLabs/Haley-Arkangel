@@ -1,11 +1,11 @@
 # Haley - ERPNext v16 for Railway
-# Based on pipech/erpnext-docker-debian pattern
+# Based on pipech/erpnext-docker-debian pattern exactly
 # Self-contained with MariaDB + Redis inside, uses bench start
 
-FROM frappe/bench:v5.27.0
+FROM frappe/bench:v5.19.0
 
 ###############################################
-# Build Arguments
+# ARG
 ###############################################
 ARG adminPass=admin
 ARG mysqlPass=admin123
@@ -13,94 +13,109 @@ ARG pythonVersion=python3
 ARG appBranch=version-16
 
 ###############################################
-# Environment
+# ENV
 ###############################################
-ENV systemUser=frappe \
-    benchFolderName=frappe-bench \
+ENV \
+    systemUser=frappe \
+    benchFolderName=bench \
     frappeRepo="https://github.com/frappe/frappe" \
     erpnextRepo="https://github.com/frappe/erpnext" \
     siteName=haley.localhost
 
 ###############################################
-# Config Files
+# Config File
 ###############################################
-COPY production/mariadb.cnf /home/frappe/mariadb.cnf
-COPY production/railway-entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY production/railway-setup.sh /home/frappe/frappe-bench/railway-setup.sh
+COPY production/mariadb.cnf /home/$systemUser/mariadb.cnf
+COPY --chown=1000:1000 production/railway-entrypoint.sh /usr/local/bin/entrypoint.sh
 
-RUN sudo chmod +x /usr/local/bin/entrypoint.sh \
-    && sudo chmod +x /home/frappe/frappe-bench/railway-setup.sh 2>/dev/null || true
+RUN sudo chmod +x /usr/local/bin/entrypoint.sh
 
 ###############################################
-# Install Dependencies
+# Install Dependencies + Init Bench + Setup Site
+# MUST be single RUN to keep MariaDB running
 ###############################################
 RUN sudo apt-get update \
-    && sudo apt-get install -y -q apt-utils \
+    && sudo apt-get install -y -q \
+    apt-utils \
     && echo "debconf debconf/frontend select Noninteractive" | sudo debconf-set-selections \
-    # MariaDB
+    ###############################################
+    # Install dependencies: MariaDB
+    ###############################################
     && sudo apt-get install -y -q apt-transport-https curl \
     && sudo mkdir -p /etc/apt/keyrings \
     && sudo curl -o /etc/apt/keyrings/mariadb-keyring.pgp "https://mariadb.org/mariadb_release_signing_key.pgp" \
-    && echo "deb [signed-by=/etc/apt/keyrings/mariadb-keyring.pgp] https://deb.mariadb.org/10.11/debian bookworm main" | sudo tee /etc/apt/sources.list.d/mariadb.list \
+    && echo "deb [signed-by=/etc/apt/keyrings/mariadb-keyring.pgp] https://mirror.kku.ac.th/mariadb/repo/10.11/debian bookworm main" | sudo tee /etc/apt/sources.list.d/mariadb.list \
     && sudo apt-get update \
     && sudo apt-get install -y -q \
-        mariadb-server \
-        mariadb-client \
-        mariadb-common \
-        libmariadb3 \
-        python3-mysqldb \
-    # Redis
-    && sudo apt-get install -y -q redis-server \
-    # Supervisor (for production mode)
-    && sudo apt-get install -y -q supervisor \
-    # Nginx
-    && sudo apt-get install -y -q nginx \
-    # Cleanup
+    mariadb-server \
+    mariadb-client \
+    mariadb-common \
+    libmariadb3 \
+    python3-mysqldb \
+    ###############################################
+    # Install dependencies: Redis
+    ###############################################
+    && sudo apt-get install -y -q \
+    redis-server \
+    ###############################################
+    # Install dependencies: supervisor
+    ###############################################
+    && sudo apt-get install -y -q \
+    supervisor \
+    ###############################################
+    # Install dependencies: nginx
+    ###############################################
+    && sudo apt-get install -y -q \
+    nginx \
+    ###############################################
+    # clean-up
+    ###############################################
     && sudo apt-get autoremove --purge -y \
-    && sudo apt-get clean -y
-
-###############################################
-# Setup MariaDB
-###############################################
-RUN sudo cp /home/frappe/mariadb.cnf /etc/mysql/mariadb.cnf \
+    && sudo apt-get clean -y \
+    ###############################################
+    # Init Bench & Setup Site
+    ###############################################
+    # copy MariaDB Config
+    && sudo cp /home/$systemUser/mariadb.cnf /etc/mysql/mariadb.cnf \
     && sudo service mariadb start \
-    && sudo mariadb --user="root" --execute="ALTER USER 'root'@'localhost' IDENTIFIED BY '${mysqlPass}';"
-
-###############################################
-# Initialize Bench
-###############################################
-RUN bench init ${benchFolderName} \
-        --frappe-path ${frappeRepo} \
-        --frappe-branch ${appBranch} \
-        --python ${pythonVersion} \
-    && cd ${benchFolderName} \
-    # Get ERPNext
-    && bench get-app erpnext ${erpnextRepo} --branch ${appBranch} \
-    # Get Enhanced Kanban View
+    && sudo mariadb --user="root" --password="${mysqlPass}" --execute="ALTER USER 'root'@'localhost' IDENTIFIED BY '${mysqlPass}';" \
+    ###############################################
+    # Init Bench
+    ###############################################
+    && bench init $benchFolderName --frappe-path $frappeRepo --frappe-branch $appBranch --python $pythonVersion \
+    && cd $benchFolderName \
+    # install erpnext
+    && bench get-app erpnext $erpnextRepo --branch $appBranch \
+    # install enhanced kanban view
     && bench get-app https://github.com/ArkSol-Innovations/enhanced-kanban-view --branch main \
-    # Cleanup temp files
-    && sudo rm -rf /tmp/*
+    # delete temp file
+    && sudo rm -rf /tmp/* \
+    # start new site
+    && bench new-site $siteName \
+    --mariadb-root-password $mysqlPass \
+    --admin-password $adminPass \
+    && bench --site $siteName install-app erpnext \
+    && bench --site $siteName install-app enhanced_kanban_view \
+    # use site
+    && bench use $siteName \
+    # compile all python file
+    && $pythonVersion -m compileall -q /home/$systemUser/$benchFolderName/apps/frappe/frappe \
+    && $pythonVersion -m compileall -q /home/$systemUser/$benchFolderName/apps/erpnext/erpnext
 
 ###############################################
-# Create Site & Install Apps
+# Copy setup script (after bench dir exists)
 ###############################################
-RUN sudo service mariadb start \
-    && cd ${benchFolderName} \
-    && bench new-site ${siteName} \
-        --mariadb-root-password ${mysqlPass} \
-        --admin-password ${adminPass} \
-    && bench --site ${siteName} install-app erpnext \
-    && bench --site ${siteName} install-app enhanced_kanban_view \
-    && bench use ${siteName} \
-    # Compile Python files
-    && ${pythonVersion} -m compileall -q /home/${systemUser}/${benchFolderName}/apps/frappe/frappe \
-    && ${pythonVersion} -m compileall -q /home/${systemUser}/${benchFolderName}/apps/erpnext/erpnext
+COPY --chown=1000:1000 production/railway-setup.sh /home/$systemUser/$benchFolderName/railway-setup.sh
+RUN chmod +x /home/$systemUser/$benchFolderName/railway-setup.sh
 
 ###############################################
-# Workdir & Entrypoint
+# WORKDIR
 ###############################################
-WORKDIR /home/${systemUser}/${benchFolderName}
+WORKDIR /home/$systemUser/$benchFolderName
 
+###############################################
+# FINALIZED
+###############################################
 CMD ["/usr/local/bin/entrypoint.sh"]
 
 EXPOSE 8000 9000 3306

@@ -52,7 +52,7 @@ By default, the container uses its internal MariaDB. For production, use Railway
 2. Run the setup script:
 
 ```bash
-su frappe -c "/home/frappe/frappe-bench/railway-setup.sh"
+su frappe -c "/home/frappe/bench/railway-setup.sh"
 ```
 
 3. Set environment variables in Railway:
@@ -127,7 +127,7 @@ OR with external services:
 1. Open Railway shell
 2. Upload your backup:
 ```bash
-cd /home/frappe/frappe-bench
+cd /home/frappe/bench
 # Download your backup
 curl -O https://your-server/backup.sql.gz
 # Restore
@@ -138,7 +138,7 @@ bench --site haley.localhost migrate
 ### Installing Additional Apps
 
 ```bash
-cd /home/frappe/frappe-bench
+cd /home/frappe/bench
 bench get-app https://github.com/your-org/your-app
 bench --site haley.localhost install-app your_app
 ```

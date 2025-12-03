@@ -19,5 +19,5 @@ sleep 2
 
 # Start bench (runs all frappe processes via honcho)
 echo "Starting Frappe/ERPNext..."
-cd /home/frappe/frappe-bench
+cd /home/frappe/bench
 exec bench start

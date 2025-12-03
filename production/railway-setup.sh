@@ -1,11 +1,11 @@
 #!/bin/bash
 # Haley Railway Setup Script
 # Run this after deployment to configure external services
-# Usage: su frappe -c "/home/frappe/frappe-bench/railway-setup.sh"
+# Usage: su frappe -c "/home/frappe/bench/railway-setup.sh"
 
 set -e
 
-cd /home/frappe/frappe-bench
+cd /home/frappe/bench
 
 echo "=== Haley Railway Setup ==="
 
