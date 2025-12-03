@@ -10,7 +10,7 @@ FROM frappe/bench:v5.19.0
 ARG adminPass=admin
 ARG mysqlPass=admin123
 ARG pythonVersion=python3
-ARG appBranch=version-15
+ARG appBranch=version-16-beta
 
 ###############################################
 # ENV
