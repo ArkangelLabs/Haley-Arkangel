@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Haley ERPNext v16 - Lightsail $10/month'
+
+Parameters:
+  InstanceName:
+    Type: String
+    Default: haley-erpnext
+
+  AvailabilityZone:
+    Type: String
+    Default: us-east-1a
+
+  KeyPairName:
+    Type: String
+    Default: ''
+
+  GitHubRepo:
+    Type: String
+    Default: https://github.com/Arkangel/Haley.git
+    Description: Your GitHub repo URL
+
+  SiteName:
+    Type: String
+    Default: haley.localhost
+
+  AdminPassword:
+    Type: String
+    Default: admin
+    NoEcho: true
+
+  DBPassword:
+    Type: String
+    Default: admin123
+    NoEcho: true
+
+Resources:
+  HaleyInstance:
+    Type: AWS::Lightsail::Instance
+    Properties:
+      InstanceName: !Ref InstanceName
+      AvailabilityZone: !Ref AvailabilityZone
+      BlueprintId: ubuntu_22_04
+      BundleId: small_3_0  # $10/month: 2GB RAM, 1 vCPU, 60GB SSD
+      KeyPairName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+      Tags:
+        - Key: Project
+          Value: Haley
+      Networking:
+        Ports:
+          - FromPort: 22
+            ToPort: 22
+            Protocol: tcp
+            AccessFrom: '0.0.0.0/0'
+            AccessType: public
+            AccessDirection: inbound
+          - FromPort: 80
+            ToPort: 80
+            Protocol: tcp
+            AccessFrom: '0.0.0.0/0'
+            AccessType: public
+            AccessDirection: inbound
+          - FromPort: 443
+            ToPort: 443
+            Protocol: tcp
+            AccessFrom: '0.0.0.0/0'
+            AccessType: public
+            AccessDirection: inbound
+      AddOns:
+        - AddOnType: AutoSnapshot
+          AutoSnapshotAddOnRequest:
+            SnapshotTimeOfDay: '06:00'
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          exec > >(tee /var/log/user-data.log) 2>&1
+          echo "=== Haley Setup Started ==="
+
+          apt-get update && apt-get upgrade -y
+          apt-get install -y git python3-dev python3-pip python3-venv \
+            redis-server mariadb-server mariadb-client libmariadb-dev \
+            nginx supervisor curl wget wkhtmltopdf
+
+          # Node.js 22
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+          apt-get install -y nodejs
+          npm install -g yarn
+
+          # Create frappe user
+          useradd -m -s /bin/bash frappe || true
+          echo "frappe ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/frappe
+
+          # MariaDB config
+          mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${DBPassword}';"
+          cat > /etc/mysql/mariadb.conf.d/99-frappe.cnf << 'MARIADB'
+          [mysqld]
+          character-set-client-handshake = FALSE
+          character-set-server = utf8mb4
+          collation-server = utf8mb4_unicode_ci
+          [mysql]
+          default-character-set = utf8mb4
+          MARIADB
+          systemctl restart mariadb
+
+          # Setup bench + apps
+          sudo -u frappe bash << 'FRAPPESETUP'
+          cd /home/frappe
+          pip3 install --user frappe-bench
+          export PATH=$PATH:/home/frappe/.local/bin
+          echo 'export PATH=$PATH:/home/frappe/.local/bin' >> ~/.bashrc
+
+          # Init bench
+          bench init frappe-bench --frappe-branch version-16 --python python3
+          cd frappe-bench
+
+          # Get ERPNext
+          bench get-app erpnext --branch version-16
+
+          # Clone Haley repo and symlink enhanced_kanban_view
+          git clone ${GitHubRepo} /home/frappe/haley-repo
+          ln -s /home/frappe/haley-repo/apps/enhanced_kanban_view apps/enhanced_kanban_view
+          bench setup requirements --node
+
+          # Create site and install apps
+          bench new-site ${SiteName} \
+            --mariadb-root-password ${DBPassword} \
+            --admin-password ${AdminPassword} \
+            --install-app erpnext \
+            --install-app enhanced_kanban_view
+
+          bench use ${SiteName}
+          bench build
+          sudo bench setup production frappe --yes
+          FRAPPESETUP
+
+          echo "=== Haley Setup Complete ==="
+
+  HaleyStaticIp:
+    Type: AWS::Lightsail::StaticIp
+    Properties:
+      StaticIpName: !Sub '${InstanceName}-ip'
+      AttachedTo: !Ref InstanceName
+    DependsOn: HaleyInstance
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+
+Outputs:
+  StaticIpAddress:
+    Value: !GetAtt HaleyStaticIp.IpAddress
+  SSHCommand:
+    Value: !Sub 'ssh ubuntu@${HaleyStaticIp.IpAddress}'
+  WebURL:
+    Value: !Sub 'http://${HaleyStaticIp.IpAddress}'

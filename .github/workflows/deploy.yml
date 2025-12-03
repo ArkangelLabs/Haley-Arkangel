@@ -1,43 +1,29 @@
-name: Deploy to AWS Lightsail (Bare Metal)
+name: Deploy to Lightsail
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-env:
-  LIGHTSAIL_HOST: 75.101.190.200
-  SITE_NAME: haley.localhost
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/lightsail.pem
-          chmod 600 ~/.ssh/lightsail.pem
-          ssh-keyscan -H ${{ env.LIGHTSAIL_HOST }} >> ~/.ssh/known_hosts
+          echo "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/key.pem
+          chmod 600 ~/.ssh/key.pem
+          ssh-keyscan -H 52.73.146.184 >> ~/.ssh/known_hosts
 
       - name: Deploy
         run: |
-          ssh -i ~/.ssh/lightsail.pem ubuntu@${{ env.LIGHTSAIL_HOST }} "
-            set -e
-            echo '=== Pulling latest code ==='
-            cd /home/frappe/repos/haley && sudo -u frappe git pull origin main
-            echo '=== Running deployment ==='
-            cd /home/frappe/frappe-bench
-            sudo -u frappe /home/frappe/.local/bin/bench --site haley.localhost migrate --skip-failing
-            sudo -u frappe /home/frappe/.local/bin/bench build --app enhanced_kanban_view
-            sudo -u frappe /home/frappe/.local/bin/bench --site haley.localhost clear-cache
-            echo '=== Restarting services ==='
-            sudo supervisorctl restart all
-            echo '=== Deployment complete! ==='
-          "
+          ssh -i ~/.ssh/key.pem ubuntu@52.73.146.184 "
+            cd /home/frappe/haley-repo
+            sudo -u frappe git pull origin main
 
-      - name: Health check
-        run: |
-          sleep 10
-          curl -f http://${{ env.LIGHTSAIL_HOST }} || echo "Site may still be starting..."
+            cd /home/frappe/frappe-bench
+            sudo -u frappe bench migrate --skip-failing
+            sudo -u frappe bench build --app enhanced_kanban_view
+            sudo supervisorctl restart all
+          "
