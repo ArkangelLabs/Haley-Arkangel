@@ -84,9 +84,10 @@ jobs:
             sleep 5
             sudo docker-compose up -d --no-deps --build frontend
 
-            # Run migrations if needed
-            echo "Running migrations..."
+            # Build assets and run migrations
+            echo "Building assets and running migrations..."
             BACKEND=$(sudo docker-compose ps -q backend)
+            sudo docker exec $BACKEND bench build --app enhanced_kanban_view || true
             sudo docker exec $BACKEND bench --site haley.localhost migrate --skip-failing || true
 
             # Clear cache
